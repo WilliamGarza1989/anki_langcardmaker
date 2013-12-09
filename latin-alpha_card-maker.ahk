@@ -285,17 +285,24 @@ CreateDictionaries()
 						}
 					;THIS PART IS REALLY CONVULUTED, I'LL PROBABLY FIND A BETTER WAY OF ORGANIZING IT SOON ENOUGH. SORRY ABOUT THAT...
 					
-					
-					Clozearea := SubStr(Haystack, pos_term-9, 14)
-					StringReplace, MinusSave, Clozearea, [••],%Field_Term%,,all
+					; get text surrounding target term 9 spaces forward and 14 backward and save to variable '1stclozedinHaystack'****************
+					;the extra space ensures that cloze deletion that will occur later will be unique so more than one instance of the words is not 
+					;replaced in a single card. This allows the user to focus only on the missing word and prevents confusion.
+					1stclozedinHaystack := SubStr(Haystack, pos_term-9, 14)
+					;De-cloze (i.e. fill in the cloze with term) delete text from snippet of text '1stclozedinHaystack'
+					StringReplace, DeClozed, 1stclozedinHaystack, [••],%Field_Term%,,all
+					;Find position of target term in context and save this to 'FromRightOffset'
 					FromRightOffset := Length-pos_term
+					;Get position of periods 2 sentences to the left and right using '.' as a delimiter, for a total of 5 sentences for the anki card. 
 					StringGetPos, pos_L, Haystack,`., R3, FromRightOffset
 					StringGetPos, pos_R, Haystack,`., L3, pos_term
-
+					
+					;Save Text within the position of these two periods to variable'Sentences'
 					Sentences := SubStr(Haystack, pos_L+2, pos_R-pos_L)
-					;create
+					; reverse cloze delete the target term. i.e. fill the holes
 					StringReplace, Sentences, Sentences, [••],%Field_Term%,,all
-					StringReplace, Sentences, Sentences, %MinusSave%,%Clozearea%,,all
+					; replace unique text snippet (9-14 spaces around term) surrounding target term with clozed snippet. ************************
+					StringReplace, Sentences, Sentences, %DeClozed%,%1stclozedinHaystack%,,all
 
 					;Revert context to original state before adding spaces around potential delimiters i.e. '.,;:?!etc'
 					StringReplace, Sentences, Sentences,Mr`.,Mr,,all
@@ -315,9 +322,13 @@ CreateDictionaries()
 					; Format the sentences with color for use with ANki html import--------------------------------------
 					StringReplace, Question_Cloze, Sentences,[••],<span style="font-weight:600; color:#0000ff;">[••]</span>,,
 					StringReplace, AnswerSent, Sentences,[••],<span style="font-weight:600; color:#0000ff;">%Field_Term%</span>,,
+					
+					;--------OPTIONAL------------------------OPTIONAL----------------------------------OPTIONAL-------------------------------------------------------------
+					;-----The following lines 331-354 are optional as they may make the anki cards too heavy for reasonable use.-------------------------
+					;This part will add definitions to bottom of card for the words in the context surrounding the target term (i.e. the non-clozed text)
+					; adding the extra definitions can make the cards extremely memory heavy and thus make importing impossible. 
+					; Fill in clozes again and remove symbols for use in new variable 'ParseParagraph'
 					StringReplace, ParseParagraph, Sentences,[••],%Field_Term%,,
-
-
 					StringReplace, ParseParagraph, ParseParagraph,`.,,,All
 					StringReplace, ParseParagraph, ParseParagraph,`,,,,All
 					StringReplace, ParseParagraph, ParseParagraph,`?,,,All
@@ -328,20 +339,28 @@ CreateDictionaries()
 					FileAppend, %ParseParagraph%, %A_ScriptDir%\Temp.txt,UTF-8
 
 
-						
-					Definitions= ;clear definitions for next Loop
+					; Add definitions at bottom of card for the context surrounding the target term (i.e. the non-clozed text)	
+					;clear definitions for next Loop
+					Definitions=
+					;Parse through paragraph text with space as a delimiter and add words to an array
 					Loop, Parse, ParseParagraph, %A_Space%
 						{
 						Value := Corpus_Array[A_LoopField]
+						;Make definitions pretty by ading a '--' between the term and the definition
 						StringReplace, Value, Value,%A_Tab%,%A_Tab%`-`-%A_Space%%A_Space%%A_Space%,,All
+						; make them even prettier by putting each definition on a new line
 						Definitions=%Definitions%%Value%<br>
 						}
-					StringReplace, Definitions, Definitions,%A_Tab%,%A_Space%%A_Space%,,All
-					StringReplace, Definitions, Definitions,<br><br>,<br>,,All
-					StringReplace, Definitions, Definitions,<br><br>,<br>,,All
-					StringReplace, Definitions, Definitions,<br><br>,<br>,,All
-					StringReplace, Definitions, Definitions,<br><br>,<br>,,All
+						; Get ride of all double new lines in paragraph text so we get one definition pair per line
+						StringReplace, Definitions, Definitions,%A_Tab%,%A_Space%%A_Space%,,All
+						StringReplace, Definitions, Definitions,<br><br>,<br>,,All
+						StringReplace, Definitions, Definitions,<br><br>,<br>,,All
+						StringReplace, Definitions, Definitions,<br><br>,<br>,,All
+						StringReplace, Definitions, Definitions,<br><br>,<br>,,All
+					;----End of--OPTIONAL--------------------End of--OPTIONAL---------------------------------End of--OPTIONAL-------------------------------------------------------------
 					FileDelete,%A_ScriptDir%\Temp.txt
+					
+					;append card contents to file with Tabs as delimiters between each field
 					FileAppend, %Field_Term%%A_Tab%%Field_Translation%%A_Tab%%AnswerSent%%A_Tab%%Question_Cloze%%A_Tab%<span style=" color:#FF0000;">Meaning</span>%A_Tab%<span style=" color:#0000FF;">Reading</span>%A_Tab%%TextTitle%%A_Tab%%Definitions%%A_Tab%`[sound`:%Field_Term%`.mp3`]%A_Tab%Italiano `n , %OutFile%,UTF-8
 
 					sleep 1
